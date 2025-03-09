@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rekam, Putar, dan Grafik Frekuensi</title>
+  <style>
+    canvas {
+      border: 1px solid black;
+    }
+  </style>
+</head>
+<body>
+  <h1>Rekam, Putar Suara, dan Grafik Frekuensi</h1>
+
+  <canvas id="frequency-graph" width="800" height="400"></canvas>
+
+  <script>
+    let audioContext, mediaRecorder, audioStream, audioSource, analyser, canvas, ctx, dataArray, bufferLength;
+
+    // Fungsi untuk memulai perekaman, pemutaran, dan grafik frekuensi
+    function startRecording() {
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          audioStream = stream;
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+          // Membuat sumber audio dari stream mikrofon
+          audioSource = audioContext.createMediaStreamSource(stream);
+
+          // Membuat AnalyserNode untuk menganalisis frekuensi
+          analyser = audioContext.createAnalyser();
+          analyser.fftSize = 2048;  // Ukuran FFT (Fast Fourier Transform)
+          bufferLength = analyser.frequencyBinCount;
+          dataArray = new Uint8Array(bufferLength);
+
+          // Menyambungkan sumber audio ke analyser dan ke speaker
+          audioSource.connect(analyser);
+          audioSource.connect(audioContext.destination);
+
+          // Membuat elemen Audio dan memutar suara langsung
+          const audioElement = new Audio();
+          audioElement.srcObject = stream;
+          audioElement.loop = true;
+          audioElement.play();
+
+          // Siapkan canvas untuk menggambar grafik
+          canvas = document.getElementById("frequency-graph");
+          ctx = canvas.getContext("2d");
+
+          // Mulai perekaman audio
+          mediaRecorder = new MediaRecorder(stream);
+          mediaRecorder.start();
+
+          // Fungsi untuk menggambar grafik frekuensi secara real-time
+          drawFrequencyGraph();
+        })
+        .catch(err => {
+          console.error("Gagal mendapatkan akses mikrofon:", err);
+        });
+    }
+
+    // Fungsi untuk menggambar grafik frekuensi
+    function drawFrequencyGraph() {
+      requestAnimationFrame(drawFrequencyGraph);
+
+      // Ambil data frekuensi
+      analyser.getByteFrequencyData(dataArray);
+
+      // Bersihkan canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Tentukan lebar bar dan jarak antar bar
+      const barWidth = (canvas.width / bufferLength) * 2.5;
+      let x = 0;
+
+      // Gambar grafik
+      for (let i = 0; i < bufferLength; i++) {
+        const barHeight = dataArray[i];
+        const r = barHeight + 25 * (i / bufferLength);  // Warna dinamis
+        const g = 250 * (i / bufferLength);
+        const b = 50;
+
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+        x += barWidth + 1;
+      }
+    }
+
+    // Mulai perekaman saat halaman dibuka
+    window.onload = startRecording;
+
+    // Hentikan perekaman ketika halaman ditutup
+    window.onbeforeunload = () => {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+      }
+      if (audioStream) {
+        audioStream.getTracks().forEach(track => track.stop()); // Hentikan semua track
+      }
+    };
+  </script>
+</body>
+</html>
